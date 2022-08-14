@@ -5,7 +5,7 @@ library(paletteer)
 
 # set theme
 theme_owen <- function() {
-  theme_minimal(base_size = 10) %+replace%
+  theme_minimal(base_size = 10, base_family = 'Consolas') %+replace%
     theme(
       panel.grid.minor = element_blank(),
       plot.background = element_rect(fill = 'floralwhite', 
@@ -15,7 +15,8 @@ theme_owen <- function() {
 
 # participation data
 participation <- load_participation(seasons = 2021, include_pbp = T)|> 
-  filter(play_type == "pass")
+  filter(play_type == "pass") |> 
+  filter(season_type == "REG")
 
 # personnel groupings by posteam
 df <- participation |> 
@@ -27,14 +28,13 @@ df <- participation |>
   mutate(total_dropbacks = sum(dropbacks)) |> 
   ungroup() |> 
   mutate(perc = dropbacks / total_dropbacks) |> 
-  filter(perc >= 0.05)
+  filter(perc >= 0.0499)
 
-# efficiency by personnel usage
-pal <- "ggthemes::Jewel_Bright"
+# efficiency by personnel usage - plot
+pal <- "ggthemes::stata_s2color"
 
 df |> 
-  ggplot(aes(x = perc, y = mean_epa, color = offense_personnel#, size = perc
-             )) +
+  ggplot(aes(x = perc, y = mean_epa, color = offense_personnel)) +
   geom_hline(yintercept = 0, linetype = 'dashed', size = 0.2, alpha = 0.5) +
   geom_point(size = 3) +
   facet_wrap(vars(posteam), nrow = 4, scales = 'free') +
@@ -50,7 +50,8 @@ df |>
   labs(x = "Dropback Rate",
        y = "EPA per Play",
        title = "Efficiency and Usage by Personnel, 2021 Regular Season",
-       subtitle = "Inspired by @reinhardNFL | min 10% of Snaps in Groupings") +
+       subtitle = "Inspired by @reinhardNFL | Min. 5% of Snaps in Groupings",
+       caption = "By: @twain_w | Data: nflreadr's Participation Data") +
   theme_owen() +
   theme(legend.position = 'bottom',
         legend.title = element_blank(),
@@ -61,5 +62,5 @@ df |>
         plot.title = element_text(size = 13, face = 'bold'),
         plot.title.position = 'plot')
 
-
-
+# save 
+ggsave("personnel_usage_efficiency.png", w = 15, h = 8, dpi = 300, type = 'cairo')
