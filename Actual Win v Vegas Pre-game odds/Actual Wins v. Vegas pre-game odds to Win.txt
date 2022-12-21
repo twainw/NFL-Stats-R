@@ -1,0 +1,181 @@
+library(nflreadr)
+library(gt)
+library(gtExtras)
+library(tidyverse)
+library(nflfastR)
+library(paletteer)
+
+# pull schedules
+schedules <- load_schedules(seasons = 2018:2022)
+pbp <- load_pbp(seasons = 2018:2022)
+
+# pull vegas win probability at the start of every play 
+wp <- pbp |> 
+  filter(play_id == 1) |> 
+  select(game_id, vegas_home_wp) |> 
+  mutate(vegas_away_wp = 1-vegas_home_wp)
+
+rm(pbp)
+
+# data wrangling
+df <- schedules |> 
+  mutate(away_team = ifelse(away_team == "OAK", "LV", away_team),
+         home_team = ifelse(home_team == "OAK", "LV", home_team)) |> 
+  filter(!is.na(result)) |> 
+  select(game_id:result, spread_line) |> 
+  mutate(winning_team = case_when(result > 0 ~ home_team, 
+                                  result < 0 ~ away_team, 
+                                  TRUE ~ "TIE")) |> 
+  mutate(loosing_team = case_when(result > 0 ~ away_team, 
+                                  result < 0 ~ home_team, 
+                                  TRUE ~ "TIE"
+  )) |> 
+  left_join(wp, by = c("game_id")) |> 
+  filter(game_id != "2022_15_IND_MIN")
+
+# calculate winning % of each team
+total_win_perc <- df |> count(home_team) |> rename(home_games = n) |> 
+  left_join(df |> count(away_team) |> rename(away_games = n), 
+            by = c("home_team" = "away_team")) |>
+  left_join(df |> count(winning_team) |> rename(wins = n), 
+            by = c("home_team" = "winning_team")) |>
+  rename(team = home_team) |> 
+  mutate(total_games = home_games + away_games) |> 
+  mutate(total_win_perc = wins / total_games) |> 
+  arrange(-total_win_perc)
+
+# calculate number of games and win % by vegas odds
+wp_by_game <- df |> 
+  select(game_id, home_team, vegas_home_wp) |> 
+  rename(team = home_team, wp = vegas_home_wp) |> 
+  bind_rows(
+    df |> 
+      select(game_id, away_team, vegas_away_wp) |> 
+      rename(team = away_team, wp = vegas_away_wp)
+  )
+
+games_and_wins_by_wp_category <- df |> 
+  filter(winning_team != "TIE") |> 
+  select(game_id, home_team, away_team) |> 
+  pivot_longer(!game_id, names_to = 'location', values_to = 'team') |>
+  select(-location) |> 
+  left_join(wp_by_game, by = c("game_id", "team")) |> 
+  left_join(df |> select(game_id, winning_team), by = "game_id") |> 
+  mutate(win = ifelse(team == winning_team , 1, 0),
+         game = 1) |> 
+  select(-winning_team) |> 
+  mutate(wp_category = case_when(
+    wp <= 0.20 ~ "0-20%", 
+    wp <= 0.40 ~ "21-40%",
+    wp <= 0.60 ~ "41-60%", 
+    wp <= 0.80 ~ "61-80%",
+    TRUE ~ "81-100%"
+  )) |> 
+  group_by(team, wp_category) |> 
+  summarize(wins = sum(win), games = sum(game)) |> 
+  mutate(win_perc = wins / games) |> 
+  select(-wins) |> 
+  pivot_wider(names_from = wp_category, values_from = c(win_perc, games)) |> 
+  mutate_at(-1, ~replace_na(.,0)) |> 
+  ungroup()
+
+# final df
+df_final <- games_and_wins_by_wp_category |> 
+  left_join(total_win_perc, by = "team") |> 
+  arrange(-total_win_perc) |> 
+  mutate(row = row_number()) |> 
+  relocate(row, .before = team) |> 
+  left_join(teams_colors_logos |> select(team_abbr, team_logo_espn), 
+            by = c("team" = "team_abbr")) |> 
+  relocate(team_logo_espn, .after = row) |> 
+  select(-home_games, -away_games, -wins, -total_games, -team)
+
+gt_fn <- function(x) {
+  gt(x) |> 
+    gt_merge_stack(col1 = "win_perc_0-20%", col2 = "games_0-20%", 
+                   font_weight = c("normal", "normal"),
+                   palette = c("black", "black")) |> 
+    gt_merge_stack(col1 = "win_perc_21-40%", col2 = "games_21-40%", 
+                   font_weight = c("normal", "normal"),
+                   palette = c("black", "black")) |> 
+    gt_merge_stack(col1 = "win_perc_41-60%", col2 = "games_41-60%", 
+                   font_weight = c("normal", "normal"),
+                   palette = c("black", "black")) |>  
+    gt_merge_stack(col1 = "win_perc_61-80%", col2 = "games_61-80%", 
+                   font_weight = c("normal", "normal"),
+                   palette = c("black", "black")) |>  
+    gt_merge_stack(col1 = "win_perc_81-100%", col2 = "games_81-100%", 
+                   font_weight = c("normal", "normal"),
+                   palette = c("black", "black")) |>  
+    fmt_percent(columns = c("win_perc_0-20%", "win_perc_21-40%", "win_perc_41-60%", 
+                            "win_perc_61-80%", "win_perc_81-100%"), 
+                decimals = 0) |> 
+    tab_style(
+      style = list(
+        cell_text(weight = 'bold')
+      ),
+      locations = cells_body(
+        columns = c("row", "total_win_perc")
+      )) |>
+    cols_align(align = 'center', columns = c("team_logo_espn")) |> 
+    cols_align(align = 'right', columns = 'row') |> 
+    fmt_number(columns = "total_win_perc", decimals = 2) |> 
+    cols_label("win_perc_0-20%" = "0-20%", 
+               "win_perc_21-40%" = "21-40%", 
+               "win_perc_41-60%" = "41-60%",
+               "win_perc_61-80%" = "61-80%",
+               "win_perc_81-100%" = "81-100%",
+               total_win_perc = md("Total Win<br>Rate"),
+               row = "", 
+               team_logo_espn =  html("<span style='color:blue'>VEGAS ODDS &#8594;</span>")
+    ) |> 
+    tab_spanner(label = md("**ACTUAL WIN PERCENTAGE**"), 
+                columns = `win_perc_0-20%`:`win_perc_81-100%`) |> 
+    gt_img_rows(team_logo_espn, height = 35) |> 
+    gt_hulk_col_numeric(total_win_perc, domain = c(0.25, 0.77)) |> 
+    data_color(
+      columns = `win_perc_0-20%`:`win_perc_81-100%`,
+      colors = scales::col_numeric(
+        palette = paletteer::paletteer_c(
+          palette = "ggthemes::Orange-Blue Light Diverging",
+          n = 10,
+          direction = 1
+        ) |>  as.character(),
+        domain = c(0, 1), 
+        na.color = "#00441BFF"
+      )
+    ) |> 
+    tab_style(
+      style = list(
+        cell_borders(
+          side = c('right', 'left'),
+          color = 'black', 
+          weight = px(2)
+        )),
+      locations = cells_body(columns = total_win_perc)) |> 
+    tab_source_note(
+      source_note = md("Table: @twain_w | Data: #nflverse")
+    ) |> 
+    tab_footnote(
+      footnote = md("Team win % in each grouping of pregame Vegas win probability"),
+      locations = cells_column_spanners()
+    ) |> 
+    gt_theme_538()
+}
+
+(tab1 <- df_final |> slice(1:16) |> gt_fn())
+(tab2 <- df_final |> slice(17:32) |> gt_fn())
+
+obj <- htmltools::div(html("<span style='font-size:15pt; font-weight:bold'><center>Actual Wins vs Vegas Pregame Odds to Win<center></span>"),
+                      html("<span style='font-size:9.5pt; font-weight:normal'><center>How often do teams actually win when Vegas says they should? 2018-2022<br />Subscripted Number: Games Played (inc. Playoffs)<center></span>"),
+                      gt_two_column_layout(list(tab1, tab2)))
+
+gtsave_extra(obj, filename = "table.png", vheight = 1800)
+
+
+
+
+
+
+
+
