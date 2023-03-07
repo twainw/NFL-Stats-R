@@ -116,25 +116,28 @@ def_df <- df |>
 # build a GT table
 gt_fn <- function(x) {
   
-  x |> 
-    fmt_percent(columns = 3:7, 
-                decimals = 0) |> 
+  x |>
+    fmt_number(
+      columns = 3:last_col(), 
+      decimals = 0, 
+      sep_mark = ","
+    ) |> 
     tab_style(
       style = list(
         cell_text(weight = 'bold')
       ),
       locations = cells_body(
-        columns = c("row", "total")
+        columns = c("row", "total_value")
       )) |> 
     cols_align(align = 'center', columns = c("team_logo_espn")) |> 
     cols_align(align = 'right', columns = 'row') |> 
     cols_label(
-      total = md("Total<br>Picks"),
-      team_logo_espn = html("<span style='color:blue'>POSITION<br />GROUPS &#8594;</span>"),
+      total_value = md("Total<br>Value"),
+      team_logo_espn = html("<span style='color:blue'>POSITION<br />GROUP &#8594;</span>"),
       row = ""
     ) |> 
     gt_img_rows(team_logo_espn, height = 35) |> 
-    gt_hulk_col_numeric(total, domain = c(14, 33)) |> 
+    gt_hulk_col_numeric(total_value, domain = c(1100, 12000)) |> 
     data_color(
       columns = 3:7,
       colors = scales::col_numeric(
@@ -143,7 +146,7 @@ gt_fn <- function(x) {
           n = 10,
           direction = 1
         ) |>  as.character(),
-        domain = c(0, 0.5), 
+        domain = c(0, 5500), 
         na.color = "#00441BFF"
       )
     ) |> 
@@ -154,7 +157,7 @@ gt_fn <- function(x) {
           color = 'black', 
           weight = px(2)
         )),
-      locations = cells_body(columns = total)) |> 
+      locations = cells_body(columns = total_value)) |> 
     cols_width(
       3:7 ~ px(50)
     ) |> 
@@ -166,28 +169,28 @@ gt_fn <- function(x) {
 build_off_gt_table <- function(x) {
   
   gt(x) |> 
-    gt_merge_stack(col1 = "RB/FB_p", col2 = "RB/FB", 
+    gt_merge_stack(col1 = "otc_total_value_RB/FB", col2 = "n_RB/FB", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
-    gt_merge_stack(col1 = "QB_p", col2 = "QB", 
+    gt_merge_stack(col1 = "otc_total_value_QB", col2 = "n_QB", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
-    gt_merge_stack(col1 = "OL_p", col2 = "OL", 
+    gt_merge_stack(col1 = "otc_total_value_OL", col2 = "n_OL", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
-    gt_merge_stack(col1 = "TE_p", col2 = "TE", 
+    gt_merge_stack(col1 = "otc_total_value_TE", col2 = "n_TE", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
-    gt_merge_stack(col1 = "WR_p", col2 = "WR", 
+    gt_merge_stack(col1 = "otc_total_value_WR", col2 = "n_WR", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
     tab_spanner(label = md("**OFFENSE**"), 
                 columns = 3:7) |> 
-    cols_label("RB/FB_p" = "RB/FB", 
-               "QB_p" = "QB", 
-               "OL_p" = "OL",
-               "TE_p" = "TE",
-               "WR_p" = "WR"
+    cols_label("otc_total_value_RB/FB" = "RB/FB", 
+               "otc_total_value_QB" = "QB", 
+               "otc_total_value_OL" = "OL",
+               "otc_total_value_TE" = "TE",
+               "otc_total_value_WR" = "WR"
     ) |> 
     gt_fn()
   
@@ -201,7 +204,11 @@ build_off_gt_table <- function(x) {
     ) |> 
     tab_footnote(
       footnote = md("OL = C, G, OL, OT, T"),
-      locations = cells_column_labels(columns = "OL_p")
+      locations = cells_column_labels(columns = "otc_total_value_OL")
+    ) |> 
+    tab_footnote(
+      footnote = md("From Over The Cap's Draft Value Chart"),
+      locations = cells_column_labels(columns = "total_value")
     )
 )
 
@@ -210,7 +217,7 @@ build_off_gt_table <- function(x) {
     build_off_gt_table()
 )
 
-obj <- htmltools::div(html("<span style='font-size:15pt; font-weight:bold'><center>Positional Draft Capital Spent, Offense<center></span>"),
+obj <- htmltools::div(html("<span style='font-size:15pt; font-weight:bold'><center>Positional Day-1 Capital Spent, Offense<center></span>"),
                       html("<span style='font-size:9.5pt; font-weight:normal'><center>How often did each team draft an offensive position group? 2017-2022 NFL Drafts<br />Subscripted Number: # of picks used on a group<center></span>"),
                       gt_two_column_layout(list(tab1, tab2)))
 
@@ -220,28 +227,28 @@ gtsave_extra(obj, filename = "off_table.png", vheight = 1800, vwidth = 850)
 build_def_gt_table <- function(x) {
   
   gt(x) |> 
-    gt_merge_stack(col1 = "DE_p", col2 = "DE", 
+    gt_merge_stack(col1 = "otc_total_value_DE", col2 = "n_DE", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
-    gt_merge_stack(col1 = "DL_p", col2 = "DL", 
+    gt_merge_stack(col1 = "otc_total_value_DL", col2 = "n_DL", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
-    gt_merge_stack(col1 = "LB_p", col2 = "LB", 
+    gt_merge_stack(col1 = "otc_total_value_LB", col2 = "n_LB", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
-    gt_merge_stack(col1 = "S_p", col2 = "S", 
+    gt_merge_stack(col1 = "otc_total_value_S", col2 = "n_S", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
-    gt_merge_stack(col1 = "CB/DB_p", col2 = "CB/DB", 
+    gt_merge_stack(col1 = "otc_total_value_CB/DB", col2 = "n_CB/DB", 
                    font_weight = c("normal", "normal"),
                    palette = c("black", "black")) |> 
     tab_spanner(label = md("**DEFENSE**"), 
                 columns = 3:7) |> 
-    cols_label("DE_p" = "DE", 
-               "DL_p" = "DL", 
-               "LB_p" = "LB",
-               "S_p" = "S",
-               "CB/DB_p" = "CB/DB"
+    cols_label("otc_total_value_DE" = "DE", 
+               "otc_total_value_DL" = "DL", 
+               "otc_total_value_LB" = "LB",
+               "otc_total_value_S" = "S",
+               "otc_total_value_CB/DB" = "CB/DB"
     ) |> 
     gt_fn()
   
@@ -255,11 +262,11 @@ build_def_gt_table <- function(x) {
     ) |> 
     tab_footnote(
       footnote = md("LB = ILB, LB, OLB"),
-      locations = cells_column_labels(columns = "LB_p")
+      locations = cells_column_labels(columns = "otc_total_value_LB")
     ) |> 
     tab_footnote(
       footnote = md("DL = DL, DT, NT"),
-      locations = cells_column_labels(columns = "DL_p")
+      locations = cells_column_labels(columns = "otc_total_value_DL")
     )
 )
 
@@ -269,7 +276,7 @@ build_def_gt_table <- function(x) {
 )
 
 
-obj2 <- htmltools::div(html("<span style='font-size:15pt; font-weight:bold'><center>Positional Draft Capital Spent, Defense<center></span>"),
+obj2 <- htmltools::div(html("<span style='font-size:15pt; font-weight:bold'><center>Positional Day-1 Capital Spent, Defense<center></span>"),
                        html("<span style='font-size:9.5pt; font-weight:normal'><center>How often did each team draft a defensive position group? 2017-2022 NFL Drafts<br />Subscripted Number: # of picks used on a group<center></span>"),
                        gt_two_column_layout(list(tab3, tab4)))
 
