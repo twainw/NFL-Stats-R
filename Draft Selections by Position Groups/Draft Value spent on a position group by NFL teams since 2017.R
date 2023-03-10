@@ -69,8 +69,7 @@ sum(is.na(picks_df$pff))
 
 # count position categories by team and side of the ball
 df <- picks_df |> 
-  filter(day == "day_1") |> 
-  group_by(team, position_side, position_category) |> 
+  group_by(day, team, position_side, position_category) |> 
   summarize(otc_total_value = sum(otc), 
             n = n()) |> 
   ungroup()
@@ -83,37 +82,21 @@ off_df <- df |>
   filter(position_side == "OFF") |> 
   select(-position_side) |> 
   pivot_wider(names_from = position_category, values_from = n:otc_total_value) |> 
-  mutate_at(-1, ~replace_na(.,0)) |>
+  mutate_at(vars(3:last_col()), ~replace_na(.,0)) |>
   mutate(total_value = rowSums(across(c(`otc_total_value_QB`:`otc_total_value_RB/FB`)))) |> 
-  arrange(-total_value) |> 
-  mutate(row = row_number()) |> 
   left_join(nflfastR::teams_colors_logos |> select(team_abbr, team_logo_espn), 
-            by = c("team" = "team_abbr")) |> 
-  select(row, 
-         team_logo_espn,
-         "otc_total_value_RB/FB", "otc_total_value_QB", 
-         "otc_total_value_OL", "otc_total_value_TE", "otc_total_value_WR",
-         "n_RB/FB", "n_QB", "n_OL", "n_TE", "n_WR",
-         total_value)
+            by = c("team" = "team_abbr"))
 
 def_df <- df |> 
   filter(position_side == "DEF") |> 
   select(-position_side) |> 
   pivot_wider(names_from = position_category, values_from = n:otc_total_value) |> 
-  mutate_at(-1, ~replace_na(.,0)) |> 
+  mutate_at(vars(3:last_col()), ~replace_na(.,0)) |>
   mutate(total_value = rowSums(across(c(`otc_total_value_LB`:`otc_total_value_S`)))) |> 
-  arrange(-total_value) |> 
-  mutate(row = row_number()) |> 
   left_join(nflfastR::teams_colors_logos |> select(team_abbr, team_logo_espn), 
-            by = c("team" = "team_abbr")) |> 
-  select(row, 
-         team_logo_espn,
-         "otc_total_value_DE", "otc_total_value_DL", "otc_total_value_LB", 
-         "otc_total_value_S", "otc_total_value_CB/DB",
-         "n_DE", "n_DL", "n_LB", "n_S", "n_CB/DB",
-         total_value)
+            by = c("team" = "team_abbr"))
 
-# build a GT table
+# GT function
 gt_fn <- function(x) {
   
   x |>
@@ -147,7 +130,7 @@ gt_fn <- function(x) {
           direction = 1
         ) |>  as.character(),
         domain = c(0, 5500), 
-        na.color = "#00441BFF"
+        na.color = "#FFFFFF"
       )
     ) |> 
     tab_style(
@@ -165,7 +148,7 @@ gt_fn <- function(x) {
   
 }
 
-# offense gt table
+# offense gt table function
 build_off_gt_table <- function(x) {
   
   gt(x) |> 
@@ -196,34 +179,7 @@ build_off_gt_table <- function(x) {
   
 }
 
-(tab1 <- off_df |> 
-    slice(1:16) |> 
-    build_off_gt_table() |> 
-    tab_source_note(
-      source_note = md("Table: @twain_w | Data: PFR")
-    ) |> 
-    tab_footnote(
-      footnote = md("OL = C, G, OL, OT, T"),
-      locations = cells_column_labels(columns = "otc_total_value_OL")
-    ) |> 
-    tab_footnote(
-      footnote = md("From Over The Cap's Draft Value Chart"),
-      locations = cells_column_labels(columns = "total_value")
-    )
-)
-
-(tab2 <- off_df |> 
-    slice(17:32) |> 
-    build_off_gt_table()
-)
-
-obj <- htmltools::div(html("<span style='font-size:15pt; font-weight:bold'><center>Positional Day-1 Capital Spent, Offense<center></span>"),
-                      html("<span style='font-size:9.5pt; font-weight:normal'><center>How often did each team draft an offensive position group? 2017-2022 NFL Drafts<br />Subscripted Number: # of picks used on a group<center></span>"),
-                      gt_two_column_layout(list(tab1, tab2)))
-
-gtsave_extra(obj, filename = "off_table.png", vheight = 1800, vwidth = 850)
-
-# defense gt table
+# defense gt table function
 build_def_gt_table <- function(x) {
   
   gt(x) |> 
@@ -254,7 +210,66 @@ build_def_gt_table <- function(x) {
   
 }
 
-(tab3 <- def_df |> 
+# function to build all 4 tables (two images) for any day's picks
+build_a_days_table <- function(off_df, def_df, day_picks, day_title) {
+  
+  ## local df for offense
+  func_off_df <- off_df |> 
+    filter(day == day_picks) |> 
+    select(-day) |> 
+    arrange(-total_value) |> 
+    mutate(row = row_number()) |> 
+    select(row, 
+           team_logo_espn,
+           "otc_total_value_RB/FB", "otc_total_value_QB", 
+           "otc_total_value_OL", "otc_total_value_TE", "otc_total_value_WR",
+           "n_RB/FB", "n_QB", "n_OL", "n_TE", "n_WR",
+           total_value)
+  
+  ## 1st offensive table - first 16 teams
+  tab1 <- func_off_df |> 
+    slice(1:16) |> 
+    build_off_gt_table() |> 
+    tab_source_note(
+      source_note = md("Table: @twain_w | Data: PFR")
+    ) |> 
+    tab_footnote(
+      footnote = md("OL = C, G, OL, OT, T"),
+      locations = cells_column_labels(columns = "otc_total_value_OL")
+    ) |> 
+    tab_footnote(
+      footnote = md("From Over The Cap's Draft Value Chart"),
+      locations = cells_column_labels(columns = "total_value")
+    )
+  
+  ## 2nd offensive table - bottom 16 teams
+  tab2 <- func_off_df |> 
+    slice(17:32) |> 
+    build_off_gt_table()
+  
+  ## create an html object with both tables
+  obj_off <- htmltools::div(html(paste0("<span style='font-size:15pt; font-weight:bold'><center>Positional ", day_title, " Draft Value Spent, Offense<center></span>")),
+                            html("<span style='font-size:9.5pt; font-weight:normal'><center>Over The Cap Draft Value of picks each team spent on an offensive position groups. 2017-2022 NFL Drafts<br />Subscripted Number: # of picks used on a group<center></span>"),
+                            gt_two_column_layout(list(tab1, tab2)))
+  
+  ## save 
+  gtsave_extra(obj_off, filename = paste0("off_table_", day_picks, ".png"), vheight = 1800, vwidth = 850)
+  
+  ## local df for defense 
+  func_def_df <- def_df |> 
+    filter(day == day_picks) |> 
+    select(-day) |> 
+    arrange(-total_value) |> 
+    mutate(row = row_number()) |> 
+    select(row, 
+           team_logo_espn,
+           "otc_total_value_DE", "otc_total_value_DL", "otc_total_value_LB", 
+           "otc_total_value_S", "otc_total_value_CB/DB",
+           "n_DE", "n_DL", "n_LB", "n_S", "n_CB/DB",
+           total_value)
+  
+  ## 1st defensive table - first 16 teams
+  tab3 <- func_def_df |> 
     slice(1:16) |> 
     build_def_gt_table() |> 
     tab_source_note(
@@ -267,21 +282,32 @@ build_def_gt_table <- function(x) {
     tab_footnote(
       footnote = md("DL = DL, DT, NT"),
       locations = cells_column_labels(columns = "otc_total_value_DL")
+    ) |> 
+    tab_footnote(
+      footnote = md("From Over The Cap's Draft Value Chart"),
+      locations = cells_column_labels(columns = "total_value")
     )
-)
-
-(tab4 <- def_df |> 
+  
+  ## 2nd defensive table - bottom 16 teams
+  tab4 <- func_def_df |> 
     slice(17:32) |> 
     build_def_gt_table()
-)
+  
+  ## create an html object with both tables
+  obj_def <- htmltools::div(html(paste0("<span style='font-size:15pt; font-weight:bold'><center>Positional ", day_title, " Draft Value Spent, Defense<center></span>")),
+                            html("<span style='font-size:9.5pt; font-weight:normal'><center>Over The Cap Draft Value of picks each team spent on an defensive position groups. 2017-2022 NFL Drafts<br />Subscripted Number: # of picks used on a group<center></span>"),
+                            gt_two_column_layout(list(tab3, tab4)))
+  
+  ## save
+  gtsave_extra(obj_def, filename = paste0("def_table_", day_picks, ".png"), vheight = 1800, vwidth = 850)  
+}
 
+# day 1 picks
+build_a_days_table(off_df, def_df, "day_1", "Day-1")
 
-obj2 <- htmltools::div(html("<span style='font-size:15pt; font-weight:bold'><center>Positional Day-1 Capital Spent, Defense<center></span>"),
-                       html("<span style='font-size:9.5pt; font-weight:normal'><center>How often did each team draft a defensive position group? 2017-2022 NFL Drafts<br />Subscripted Number: # of picks used on a group<center></span>"),
-                       gt_two_column_layout(list(tab3, tab4)))
+# day 2 picks
+build_a_days_table(off_df, def_df, "day_2", "Day-2")
 
-gtsave_extra(obj2, filename = "def_table.png", vheight = 1800, vwidth = 850)
-
-
-
+# day 3 picks
+build_a_days_table(off_df, def_df, "day_3", "Day-3")
 
