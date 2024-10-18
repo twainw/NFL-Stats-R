@@ -9,5 +9,6 @@ The table shows how often a team has used a run concept (% of all runs and compa
 ## About the data used
 - Run concept from FTN. All other data (logos, epa, success %) from #nflverse.
 - Total runs for each team won't match PFR b/c I take out kneel downs.
+- Final Visual was inspired by Andrew Weatherman's CBB player report card: https://x.com/andreweatherman/status/1740174179432083952
 
 A huge thank you to FTN and nflverse developers for the data. 
